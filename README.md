@@ -25,8 +25,8 @@ We provide the following full-trained models via the HuggingFace model hub:
 * **mmarco-Arabic-AraDPR-cross-encoder-KD-v1 cross-encoder initialized with AraDPR** (re-ranking model):https://huggingface.co/hatemestinbejaia/mmarco-Arabic-AraDPR-cross-encoder-KD-v1
 * **mmarco-Arabic-AraDPR-cross-encoder-NoKD-v1 cross-encoder initialized with AraDPR** (re-ranking model): https://huggingface.co/hatemestinbejaia/mmarco-Arabic-AraDPR-cross-encoder-NoKD-v1
 * **mmarco-Arabic-mMiniLML-cross-encoder-KD-v1 cross-encoder initialized with mMiniLM** (re-ranking model):https://huggingface.co/hatemestinbejaia/mmarco-Arabic-mMiniLML-cross-encoder-KD-v1
-* * **mmarco-Arabic-mMiniLML-cross-encoder-NoKD-v1 cross-encoder initialized with mMiniLM** (re-ranking model):https://huggingface.co/hatemestinbejaia/mmarco-Arabic-mMiniLML-cross-encoder-NoKD-v1
- * **mmarco-Arabic-AraElectra-bi-encoder-KD-v1 Bi-encoder initialized  with Araelectra** (re-ranking and dense-retrieval model): https://huggingface.co/hatemestinbejaia/mmarco-Arabic-AraElectra-bi-encoder-KD-v1
+* **mmarco-Arabic-mMiniLML-cross-encoder-NoKD-v1 cross-encoder initialized with mMiniLM** (re-ranking model):https://huggingface.co/hatemestinbejaia/mmarco-Arabic-mMiniLML-cross-encoder-NoKD-v1
+* **mmarco-Arabic-AraElectra-bi-encoder-KD-v1 Bi-encoder initialized  with Araelectra** (re-ranking and dense-retrieval model): https://huggingface.co/hatemestinbejaia/mmarco-Arabic-AraElectra-bi-encoder-KD-v1
 * **mmarco-Arabic-AraElectra-bi-encoder-NoKD-v1 Bi-encoder initialized  with Araelectra** (re-ranking and dense-retrieval model): https://huggingface.co/hatemestinbejaia/mmarco-Arabic-AraElectra-bi-encoder-NoKD-v1
 * **mmarco-Arabic-AraDPR-bi-encoder-KD-v1 Bi-encoder initialized  with AraDPR** (re-ranking and dense-retrieval model): https://huggingface.co/hatemestinbejaia/mmarco-Arabic-AraDPR-bi-encoder-KD-v1
 * **mmarco-Arabic-AraDPR-bi-encoder-NoKD-v1 Bi-encoder initialized  with AraDPR** (re-ranking and dense-retrieval model):https://huggingface.co/hatemestinbejaia/mmarco-Arabic-AraDPR-bi-encoder-NoKD-v1
