@@ -33,6 +33,6 @@ We provide the following full-trained models via the HuggingFace model hub:
 * **mmarco-Arabic-mMiniLML-bi-encoder-KD-v1 Bi-encoder initialized  with mMiniLML** (re-ranking and dense-retrieval model):https://huggingface.co/hatemestinbejaia/mmarco-Arabic-mMiniLML-bi-encoder-KD-v1
 * **mmarco-Arabic-mMiniLML-bi-encoder-NoKD-v1 Bi-encoder initialized  with mMiniLML** (re-ranking and dense-retrieval model): https://huggingface.co/hatemestinbejaia/mmarco-Arabic-mMiniLML-bi-encoder-NoKD-v1
 
-If you have a specific request for a pre-trained model from the paper, please create an issue here :) 
+test all model in validatin set https://github.com/hatemamine/Improving-Arabic-IR-and-Reranking-Performance-with-Knowledge-Distillation/blob/main/test-all-cross-encoder-bi-encoder-in-validationset.ipynb
 
 ## Teacher Training Files (MSMARCO-Passage)
