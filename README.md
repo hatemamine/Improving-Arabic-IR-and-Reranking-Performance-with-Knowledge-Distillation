@@ -1,5 +1,5 @@
 
-[![en](https://img.shields.io/badge/lang-en-red.svg)](https://github.com/jonatasemidio/multilanguage-readme-pattern/blob/master/README.md)
+[![en](https://img.shields.io/badge/lang-en-red.svg)](https://github.com/hatemamine/Improving-Arabic-IR-and-Reranking-Performance-with-Knowledge-Distillation/edit/main/README.md)
 [![ar](https://img.shields.io/badge/lang-ar-yellow.svg)](https://github.com/jonatasemidio/multilanguage-readme-pattern/blob/master/README.ar.md)
 # Improving Arabic Information Retrieval and Reranking Performance using Knowledge Distillation
 
