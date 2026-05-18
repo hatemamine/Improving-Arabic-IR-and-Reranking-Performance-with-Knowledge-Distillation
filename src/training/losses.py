@@ -128,19 +128,23 @@ class MatryoshkaLoss(nn.Module):
 # ---------------------------------------------------------------------------
 
 
-class LabelSmoothKDLoss(nn.Module):
+class CombinedCrossEncoderLoss(nn.Module):
     """
-    Label-smoothed knowledge distillation loss for cross-encoder.
-    loss = α * BCE(logits, hard_labels) + (1-α) * KL(student || teacher)
+    Pairwise cross-encoder KD loss implementing the paper's Equation 1:
+        L_combined = λ · L_distillation + (1 − λ) · L_student
+
+    where:
+        L_distillation = BCE(student_logits, sigmoid(teacher_logits / T))
+        L_student      = BCE(student_logits, hard_binary_labels)
 
     Args:
-        alpha: weight on hard CE loss (1-alpha goes to soft KD loss)
+        kd_lambda:   λ=1 → pure knowledge distillation, λ=0 → vanilla fine-tuning
         temperature: softmax temperature applied to teacher logits
     """
 
-    def __init__(self, alpha: float = 0.5, temperature: float = 1.0):
+    def __init__(self, kd_lambda: float = 1.0, temperature: float = 1.0):
         super().__init__()
-        self.alpha = alpha
+        self.kd_lambda = kd_lambda
         self.temperature = temperature
 
     def forward(
@@ -149,36 +153,43 @@ class LabelSmoothKDLoss(nn.Module):
         teacher_logits: Tensor,   # (B,) raw logits / scores from teacher
         hard_labels: Tensor,      # (B,) binary relevance labels {0, 1}
     ) -> Tensor:
-        # Hard BCE loss
-        bce = F.binary_cross_entropy_with_logits(student_logits, hard_labels.float())
+        l_distillation = torch.tensor(0.0, device=student_logits.device)
+        l_student = torch.tensor(0.0, device=student_logits.device)
 
-        # Soft KL loss
-        T = self.temperature
-        soft_student = F.log_softmax(student_logits / T, dim=0)
-        soft_teacher = F.softmax(teacher_logits / T, dim=0)
-        kl = F.kl_div(soft_student, soft_teacher, reduction="batchmean") * (T ** 2)
+        if self.kd_lambda > 0.0:
+            teacher_probs = torch.sigmoid(teacher_logits / self.temperature)
+            l_distillation = F.binary_cross_entropy_with_logits(student_logits, teacher_probs)
 
-        return self.alpha * bce + (1 - self.alpha) * kl
+        if self.kd_lambda < 1.0:
+            l_student = F.binary_cross_entropy_with_logits(student_logits, hard_labels.float())
+
+        return self.kd_lambda * l_distillation + (1.0 - self.kd_lambda) * l_student
 
 
 class ListwiseKDLoss(nn.Module):
     """
-    Listwise knowledge distillation loss for cross-encoder.
+    Listwise cross-encoder KD loss implementing the paper's Equation 1:
+        L_combined = λ · L_distillation + (1 − λ) · L_student
+
+    where:
+        L_distillation = KL(softmax(student/T) || softmax(teacher/T))  per query group
+        L_student      = BCE(student_logits, hard_binary_labels)
 
     For each query, given K candidate passages, computes KL divergence
     between the temperature-scaled softmax of teacher scores and student scores.
 
-    This is richer than pairwise KD because it captures the full ranking
-    distribution rather than just pair-wise score differences.
-
     Input format: student_scores (B,), teacher_scores (B,), group_sizes list
     where B = sum(group_sizes) and each group corresponds to one query's candidates.
+
+    Args:
+        kd_lambda:   λ=1 → pure KD, λ=0 → vanilla fine-tuning
+        temperature: softmax temperature
     """
 
-    def __init__(self, temperature: float = 1.0, alpha: float = 0.5):
+    def __init__(self, temperature: float = 1.0, kd_lambda: float = 1.0):
         super().__init__()
         self.temperature = temperature
-        self.alpha = alpha           # blend with hard label BCE if hard_labels provided
+        self.kd_lambda = kd_lambda
 
     def forward(
         self,
@@ -188,19 +199,44 @@ class ListwiseKDLoss(nn.Module):
         hard_labels: Optional[Tensor] = None,  # (B,) optional binary labels
     ) -> Tensor:
         T = self.temperature
-        total_kl = torch.tensor(0.0, device=student_scores.device)
-        offset = 0
-        for k in group_sizes:
-            s = student_scores[offset : offset + k]
-            t = teacher_scores[offset : offset + k]
-            log_p_student = F.log_softmax(s / T, dim=0)
-            p_teacher = F.softmax(t / T, dim=0)
-            total_kl = total_kl + F.kl_div(log_p_student, p_teacher, reduction="sum")
-            offset += k
-        kl_loss = total_kl * (T ** 2) / len(group_sizes)
+        l_distillation = torch.tensor(0.0, device=student_scores.device)
+        l_student = torch.tensor(0.0, device=student_scores.device)
 
-        if hard_labels is not None and self.alpha < 1.0:
-            bce = F.binary_cross_entropy_with_logits(student_scores, hard_labels.float())
-            return self.alpha * bce + (1 - self.alpha) * kl_loss
+        if self.kd_lambda > 0.0:
+            total_kl = torch.tensor(0.0, device=student_scores.device)
+            offset = 0
+            for k in group_sizes:
+                s = student_scores[offset : offset + k]
+                t = teacher_scores[offset : offset + k]
+                log_p_student = F.log_softmax(s / T, dim=0)
+                p_teacher = F.softmax(t / T, dim=0)
+                total_kl = total_kl + F.kl_div(log_p_student, p_teacher, reduction="sum")
+                offset += k
+            l_distillation = total_kl * (T ** 2) / len(group_sizes)
 
-        return kl_loss
+        if self.kd_lambda < 1.0 and hard_labels is not None:
+            l_student = F.binary_cross_entropy_with_logits(student_scores, hard_labels.float())
+
+        return self.kd_lambda * l_distillation + (1.0 - self.kd_lambda) * l_student
+
+
+class LabelSmoothKDLoss(nn.Module):
+    """Deprecated: use CombinedCrossEncoderLoss instead."""
+
+    def __init__(self, alpha: float = 0.5, temperature: float = 1.0):
+        super().__init__()
+        self.alpha = alpha
+        self.temperature = temperature
+
+    def forward(
+        self,
+        student_logits: Tensor,
+        teacher_logits: Tensor,
+        hard_labels: Tensor,
+    ) -> Tensor:
+        bce = F.binary_cross_entropy_with_logits(student_logits, hard_labels.float())
+        T = self.temperature
+        soft_student = F.log_softmax(student_logits / T, dim=0)
+        soft_teacher = F.softmax(teacher_logits / T, dim=0)
+        kl = F.kl_div(soft_student, soft_teacher, reduction="batchmean") * (T ** 2)
+        return self.alpha * bce + (1 - self.alpha) * kl

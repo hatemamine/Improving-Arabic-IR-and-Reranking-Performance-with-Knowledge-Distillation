@@ -21,18 +21,19 @@ from transformers import (
 from src.config.config import PipelineConfig
 from src.models.cross_encoder import CrossEncoderModel
 from src.utils import wandb_logger
-from src.training.losses import LabelSmoothKDLoss, ListwiseKDLoss
+from src.training.losses import CombinedCrossEncoderLoss, ListwiseKDLoss
 
 logger = logging.getLogger(__name__)
 
 
 class CrossEncoderTrainer:
     """
-    Trains a cross-encoder with one of four modes:
-      - NoKD        : standard BCE with binary relevance labels
-      - KD pairwise : LabelSmoothKDLoss (α*BCE + (1-α)*KL per pair)
-      - KD listwise : ListwiseKDLoss (KL over full K-list per query)
-      - Any mode can be combined with LoRA via ModelConfig
+    Trains a cross-encoder with one of three modes, all governed by kd_lambda:
+      - NoKD (use_kd=False) : standard BCE with binary relevance labels
+      - KD pairwise         : CombinedCrossEncoderLoss — λ·BCE(student,teacher) + (1-λ)·BCE(student,hard)
+      - KD listwise         : ListwiseKDLoss           — λ·KL(student||teacher) + (1-λ)·BCE(student,hard)
+    λ=1 → pure knowledge distillation, λ=0 → vanilla fine-tuning.
+    Any mode can be combined with LoRA via ModelConfig.
     """
 
     def __init__(self, config: PipelineConfig, cross_encoder: CrossEncoderModel):
@@ -108,15 +109,27 @@ class CrossEncoderTrainer:
         if t_cfg.kd_mode == "listwise":
             kd_loss_fn = ListwiseKDLoss(
                 temperature=t_cfg.kd_temperature,
-                alpha=t_cfg.kd_alpha,
+                kd_lambda=t_cfg.kd_lambda,
             )
-            logger.info("Using ListwiseKDLoss (T=%.2f, α=%.2f)", t_cfg.kd_temperature, t_cfg.kd_alpha)
+            logger.info(
+                "Using ListwiseKDLoss (T=%.2f, λ=%.2f) — %s",
+                t_cfg.kd_temperature, t_cfg.kd_lambda,
+                "pure KD" if t_cfg.kd_lambda == 1.0 else (
+                    "vanilla" if t_cfg.kd_lambda == 0.0 else "combined"
+                ),
+            )
         else:
-            kd_loss_fn = LabelSmoothKDLoss(
-                alpha=t_cfg.kd_alpha,
+            kd_loss_fn = CombinedCrossEncoderLoss(
+                kd_lambda=t_cfg.kd_lambda,
                 temperature=t_cfg.kd_temperature,
             )
-            logger.info("Using LabelSmoothKDLoss (T=%.2f, α=%.2f)", t_cfg.kd_temperature, t_cfg.kd_alpha)
+            logger.info(
+                "Using CombinedCrossEncoderLoss (T=%.2f, λ=%.2f) — %s",
+                t_cfg.kd_temperature, t_cfg.kd_lambda,
+                "pure KD" if t_cfg.kd_lambda == 1.0 else (
+                    "vanilla" if t_cfg.kd_lambda == 0.0 else "combined"
+                ),
+            )
 
         kd_loss_fn = kd_loss_fn.to(next(self.cross_encoder.model.parameters()).device)
 

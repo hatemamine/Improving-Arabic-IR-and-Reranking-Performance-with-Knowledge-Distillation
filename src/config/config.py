@@ -91,7 +91,8 @@ class TrainingConfig:
     # KD settings
     use_kd: bool = True
     kd_mode: str = "pairwise"        # "pairwise" | "listwise"  (cross-encoder)
-    kd_alpha: float = 0.5            # label smoothing: α*hard + (1-α)*KD_soft
+    kd_lambda: float = 1.0           # λ in L = λ·L_distillation + (1-λ)·L_student
+    #                                  λ=1 → pure KD, λ=0 → vanilla fine-tuning
     kd_temperature: float = 1.0      # softmax temperature for soft labels
 
     # Hard negatives
@@ -178,7 +179,7 @@ class PipelineConfig:
             f"Dataset      : {self.data.dataset}",
             f"Base model   : {self.model.base_model} ({self.model.get_hf_model_id()})",
             f"Encoder type : {self.model.encoder_type}",
-            f"KD           : {self.training.use_kd} (mode={self.training.kd_mode}, α={self.training.kd_alpha}, T={self.training.kd_temperature})",
+            f"KD           : {self.training.use_kd} (mode={self.training.kd_mode}, λ={self.training.kd_lambda}, T={self.training.kd_temperature})",
             f"Hard negs    : {self.training.hard_negatives} (strategy={self.training.hn_strategy})",
             f"LoRA         : {self.model.use_lora}",
             f"Matryoshka   : {self.model.use_matryoshka} (dims={self.model.matryoshka_dims})",

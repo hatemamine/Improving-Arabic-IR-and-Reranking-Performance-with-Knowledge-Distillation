@@ -24,10 +24,11 @@ logger = logging.getLogger(__name__)
 
 class BiEncoderTrainer:
     """
-    Trains a bi-encoder with one of four loss configurations:
-      - NoKD : MultipleNegativesRankingLoss
-      - KD pairwise : MarginMSELoss
-      - KD + Hybrid : HybridMNRLMarginMSELoss
+    Trains a bi-encoder with losses governed by kd_lambda:
+      - use_kd=False            : pure MNRL (vanilla fine-tuning)
+      - use_kd=True, λ=1        : pure MarginMSE (pure KD distillation)
+      - use_kd=True, 0 < λ < 1  : λ·MarginMSE + (1-λ)·MNRL (combined)
+      - use_kd=True, λ=0        : pure MNRL (equivalent to use_kd=False)
       - Any of the above + Matryoshka wrapper
     """
 
@@ -106,15 +107,24 @@ class BiEncoderTrainer:
         t_cfg = cfg.training
         m_cfg = cfg.model
 
-        if not t_cfg.use_kd:
+        lam = t_cfg.kd_lambda if t_cfg.use_kd else 0.0
+
+        if lam == 0.0:
+            # λ=0 or use_kd=False → vanilla fine-tuning with MNRL
             base_loss = losses.MultipleNegativesRankingLoss(model=self.model)
-        elif t_cfg.use_mnrl_hybrid:
+            logger.info("Bi-encoder loss: MNRL (λ=0, vanilla fine-tuning)")
+        elif lam == 1.0:
+            # λ=1 → pure KD distillation with MarginMSE
+            base_loss = MarginMSELoss(model=self.model)
+            logger.info("Bi-encoder loss: MarginMSE (λ=1, pure KD)")
+        else:
+            # 0 < λ < 1 → λ·MarginMSE + (1-λ)·MNRL
+            # HybridMNRLMarginMSELoss uses mnrl_weight for MNRL; map: mnrl_weight = 1-λ
             base_loss = HybridMNRLMarginMSELoss(
                 model=self.model,
-                mnrl_weight=t_cfg.mnrl_weight,
+                mnrl_weight=1.0 - lam,
             )
-        else:
-            base_loss = MarginMSELoss(model=self.model)
+            logger.info("Bi-encoder loss: λ·MarginMSE + (1-λ)·MNRL (λ=%.2f)", lam)
 
         if m_cfg.use_matryoshka:
             logger.info("Wrapping loss with Matryoshka dims: %s", m_cfg.matryoshka_dims)
