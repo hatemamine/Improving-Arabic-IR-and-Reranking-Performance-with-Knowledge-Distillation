@@ -5,7 +5,7 @@ import os
 from datetime import datetime
 from typing import Dict, List, Optional
 
-from src.evaluation.metrics import MetricsResult
+from src.evaluation.metrics import GeneralizationResult, MetricsResult
 
 
 _HTML_TEMPLATE = """\
@@ -39,6 +39,9 @@ _HTML_TEMPLATE = """\
   .badge-lora {{ background: #e3f2fd; color: #0d47a1; }}
   .badge-hn {{ background: #fff9c4; color: #f57f17; }}
   .badge-mat {{ background: #f3e5f5; color: #4a148c; }}
+  .gr-high  {{ color: #1b5e20; font-weight: bold; }}
+  .gr-med   {{ color: #e65100; font-weight: bold; }}
+  .gr-low   {{ color: #b71c1c; font-weight: bold; }}
   .chart-container {{ text-align: center; margin: 16px 0; }}
   img {{ max-width: 100%; border-radius: 6px; }}
   .footer {{ text-align: center; color: #9e9e9e; font-size: 0.85em; margin-top: 40px; padding-top: 16px; border-top: 1px solid #e0e0e0; }}
@@ -57,6 +60,8 @@ _HTML_TEMPLATE = """\
 
 {comparison_section}
 
+{gr_section}
+
 {charts_section}
 
 <div class="footer">Arabic IR &amp; Reranking with Knowledge Distillation — auto-generated report</div>
@@ -71,13 +76,22 @@ class ReportGenerator:
     the pipeline configuration.
     """
 
-    def __init__(self, config, results: Optional[List[MetricsResult]] = None):
+    def __init__(
+        self,
+        config,
+        results: Optional[List[MetricsResult]] = None,
+        gr_results: Optional[List[GeneralizationResult]] = None,
+    ):
         self.config = config
         self.results: List[MetricsResult] = results or []
+        self.gr_results: List[GeneralizationResult] = gr_results or []
         self._chart_paths: List[str] = []
 
     def add_result(self, result: MetricsResult):
         self.results.append(result)
+
+    def add_gr_result(self, gr: GeneralizationResult):
+        self.gr_results.append(gr)
 
     def add_chart(self, path: str):
         """Register an externally-generated chart image to embed."""
@@ -95,6 +109,7 @@ class ReportGenerator:
             summary_section=self._render_summary(),
             metrics_section=self._render_metrics_table(),
             comparison_section=self._render_comparison(),
+            gr_section=self._render_gr_section(),
             charts_section=self._render_charts(),
         )
         os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
@@ -224,6 +239,78 @@ class ReportGenerator:
         )
         return f'<div class="card"><h2>KD vs NoKD Comparison</h2>{table}</div>'
 
+    def _render_gr_section(self) -> str:
+        """
+        Generalization Ratio table.
+
+        Columns: model | stage | kd_mode | in-domain dataset | zero-shot dataset |
+                 in-domain metrics | zero-shot metrics | GR values
+
+        GR colour coding:
+          ≥ 1.0  → green  (fully generalises)
+          0.8–1  → orange (partial generalisation)
+          < 0.8  → red    (poor generalisation)
+        """
+        if not self.gr_results:
+            return ""
+
+        # Collect GR metric names from first result
+        gr_keys = [k for k in self.gr_results[0].gr.keys()]
+        base_metrics = [k[3:] for k in gr_keys]   # strip "GR_" prefix
+
+        header_cols = (
+            ["model", "stage", "kd_mode", "in_domain", "zero_shot"]
+            + [f"in {m}" for m in base_metrics]
+            + [f"zs {m}" for m in base_metrics]
+            + gr_keys
+        )
+        header_html = "".join(f"<th>{c}</th>" for c in header_cols)
+
+        rows_html = ""
+        for gr in self.gr_results:
+            cells = (
+                f"<td>{gr.model_name}</td>"
+                f"<td>{gr.stage}</td>"
+                f"<td>{gr.kd_mode}</td>"
+                f"<td>{gr.in_domain.dataset}</td>"
+                f"<td>{gr.zero_shot.dataset}</td>"
+            )
+            for m in base_metrics:
+                cells += f"<td>{gr.in_domain.get(m):.4f}</td>"
+            for m in base_metrics:
+                cells += f"<td>{gr.zero_shot.get(m):.4f}</td>"
+            for key in gr_keys:
+                val = gr.gr.get(key, 0.0)
+                if val >= 1.0:
+                    css = "gr-high"
+                elif val >= 0.8:
+                    css = "gr-med"
+                else:
+                    css = "gr-low"
+                cells += f'<td class="{css}">{val:.4f}</td>'
+            rows_html += f"<tr>{cells}</tr>"
+
+        table = (
+            f"<table><thead><tr>{header_html}</tr></thead>"
+            f"<tbody>{rows_html}</tbody></table>"
+        )
+
+        legend = (
+            '<p style="font-size:0.88em; color:#555; margin-top:10px;">'
+            '<span class="gr-high">■</span> GR ≥ 1.0 — fully generalises &nbsp;'
+            '<span class="gr-med">■</span> GR 0.8–1.0 — partial generalisation &nbsp;'
+            '<span class="gr-low">■</span> GR &lt; 0.8 — poor generalisation</p>'
+        )
+
+        note = (
+            "<p style='font-size:0.88em;color:#666;'>"
+            "GR = zero-shot metric ÷ in-domain metric. "
+            "Bi-encoder evaluated on FAISS top-1000 candidates; "
+            "Cross-encoder evaluated on BM25 candidates.</p>"
+        )
+
+        return f'<div class="card"><h2>Generalization Ratio (GR)</h2>{note}{table}{legend}</div>'
+
     def _render_charts(self) -> str:
         if not self._chart_paths:
             return ""
@@ -263,6 +350,50 @@ class ReportGenerator:
         ax.set_ylim(0, max(values) * 1.15 if values else 1.0)
         for bar, val in zip(bars, values):
             ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.002, f"{val:.4f}", ha="center", va="bottom", fontsize=8)
+        plt.xticks(rotation=30, ha="right", fontsize=8)
+        plt.tight_layout()
+        plt.savefig(output_path, dpi=150, bbox_inches="tight")
+        plt.close()
+        self.add_chart(output_path)
+        return output_path
+
+    def plot_gr_bar(
+        self,
+        output_path: str = "charts/gr_bar.png",
+        metric: str = "GR_MRR@10",
+    ) -> str:
+        """Bar chart comparing GR across all GeneralizationResult objects."""
+        if not self.gr_results:
+            return ""
+        try:
+            import matplotlib
+            matplotlib.use("Agg")
+            import matplotlib.pyplot as plt
+            import numpy as np
+        except ImportError:
+            return ""
+
+        os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+        labels = [f"{g.model_name}\n({g.stage})" for g in self.gr_results]
+        values = [g.gr.get(metric, 0.0) for g in self.gr_results]
+
+        colors = ["#66bb6a" if v >= 1.0 else ("#ffa726" if v >= 0.8 else "#ef5350") for v in values]
+
+        fig, ax = plt.subplots(figsize=(max(8, len(labels) * 1.4), 5))
+        bars = ax.bar(labels, values, color=colors, edgecolor="white", linewidth=0.8)
+        ax.axhline(1.0, color="#333", linewidth=1.2, linestyle="--", label="GR = 1.0 (full generalisation)")
+        ax.axhline(0.8, color="#e65100", linewidth=0.8, linestyle=":", alpha=0.7, label="GR = 0.8 (threshold)")
+        ax.set_title(f"{metric} — Generalization Ratio", fontsize=13, fontweight="bold")
+        ax.set_ylabel("GR (zero-shot / in-domain)")
+        ax.set_ylim(0, max(max(values) * 1.15, 1.2))
+        ax.legend(fontsize=8)
+        for bar, val in zip(bars, values):
+            ax.text(
+                bar.get_x() + bar.get_width() / 2,
+                bar.get_height() + 0.01,
+                f"{val:.3f}",
+                ha="center", va="bottom", fontsize=8,
+            )
         plt.xticks(rotation=30, ha="right", fontsize=8)
         plt.tight_layout()
         plt.savefig(output_path, dpi=150, bbox_inches="tight")
