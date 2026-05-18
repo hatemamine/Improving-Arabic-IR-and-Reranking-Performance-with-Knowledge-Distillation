@@ -71,7 +71,7 @@ class BiEncoderTrainer:
             num_train_epochs=t_cfg.num_train_epochs,
             learning_rate=t_cfg.learning_rate,
             weight_decay=t_cfg.weight_decay,
-            metric_for_best_model="eval_mrr@10",
+            metric_for_best_model="eval_dev_mrr@10",
             greater_is_better=True,
             load_best_model_at_end=True,
             report_to=t_cfg.report_to or "none",
