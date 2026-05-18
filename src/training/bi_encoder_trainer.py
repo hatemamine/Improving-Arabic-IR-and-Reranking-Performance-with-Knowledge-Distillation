@@ -12,6 +12,7 @@ from transformers import EarlyStoppingCallback, IntervalStrategy
 
 from src.config.config import PipelineConfig
 from src.models.bi_encoder import BiEncoderModel
+from src.utils import wandb_logger
 from src.training.losses import (
     HybridMNRLMarginMSELoss,
     MarginMSELoss,
@@ -89,6 +90,9 @@ class BiEncoderTrainer:
         if hard_negative_miner is not None and t_cfg.hard_negatives:
             self._register_ance_callback(trainer, hard_negative_miner, t_cfg)
 
+        if cfg.use_wandb:
+            self._register_wandb_callback(trainer)
+
         logger.info("Starting bi-encoder training…")
         trainer.train()
         return trainer
@@ -161,3 +165,16 @@ class BiEncoderTrainer:
                         )
 
         trainer.add_callback(ANCERefreshCallback())
+
+    def _register_wandb_callback(self, trainer):
+        from transformers import TrainerCallback
+
+        class WandbMetricsCallback(TrainerCallback):
+            def on_evaluate(self, args, state, control, metrics=None, **kwargs):
+                if metrics:
+                    wandb_logger.log_metrics(
+                        {f"bi_encoder/{k}": v for k, v in metrics.items()},
+                        step=state.global_step,
+                    )
+
+        trainer.add_callback(WandbMetricsCallback())

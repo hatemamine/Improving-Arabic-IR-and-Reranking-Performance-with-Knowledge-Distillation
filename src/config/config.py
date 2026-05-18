@@ -4,9 +4,12 @@ from typing import List, Optional
 
 
 SUPPORTED_MODELS = {
+    # Bi-encoder base models
     "AraELECTRA": "aubmindlab/araelectra-base-discriminator",
-    "AraDPR": "abdoelsayed/AraDPR",
-    "mMiniLML": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+    "AraDPR":     "abdoelsayed/AraDPR",
+    "mMiniLML":   "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+    # Cross-encoder models (also usable as KD teacher)
+    "mMiniLMv2CE": "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1",
 }
 
 SUPPORTED_DATASETS = {
@@ -122,6 +125,12 @@ class TrainingConfig:
     report_to: Optional[str] = None  # None | "wandb" | "tensorboard"
     run_name: str = "arabic-ir-pipeline"
 
+    # W&B — only used when report_to="wandb"
+    wandb_project: str = "arabic-ir-kd"
+    wandb_entity: Optional[str] = None   # W&B team/username, None = personal account
+    wandb_api_key: Optional[str] = None  # set here or via WANDB_API_KEY env var
+    wandb_log_artifacts: bool = True      # upload HTML report + model checkpoints as artifacts
+
 
 @dataclass
 class EvalConfig:
@@ -154,7 +163,16 @@ class PipelineConfig:
     # Reproducibility
     seed: int = 42
 
+    @property
+    def use_wandb(self) -> bool:
+        return self.training.report_to == "wandb"
+
     def summary(self) -> str:
+        wandb_info = (
+            f"wandb: project={self.training.wandb_project}"
+            + (f", entity={self.training.wandb_entity}" if self.training.wandb_entity else "")
+            if self.use_wandb else "disabled"
+        )
         lines = [
             "=== Pipeline Configuration ===",
             f"Dataset      : {self.data.dataset}",
@@ -170,5 +188,6 @@ class PipelineConfig:
             f"LR           : {self.training.learning_rate}",
             f"Metrics      : {self.evaluation.metrics}",
             f"Report       : {self.report_output}",
+            f"W&B          : {wandb_info}",
         ]
         return "\n".join(lines)

@@ -20,6 +20,7 @@ from transformers import (
 
 from src.config.config import PipelineConfig
 from src.models.cross_encoder import CrossEncoderModel
+from src.utils import wandb_logger
 from src.training.losses import LabelSmoothKDLoss, ListwiseKDLoss
 
 logger = logging.getLogger(__name__)
@@ -87,6 +88,9 @@ class CrossEncoderTrainer:
 
         if t_cfg.use_kd:
             trainer = self._patch_loss(trainer, t_cfg)
+
+        if cfg.use_wandb:
+            self._register_wandb_callback(trainer)
 
         logger.info("Starting cross-encoder training (mode=%s)…", t_cfg.kd_mode if t_cfg.use_kd else "nokd")
         trainer.train()
@@ -162,3 +166,16 @@ class CrossEncoderTrainer:
         if "test" in train_dataset:
             return train_dataset["test"]
         return None
+
+    def _register_wandb_callback(self, trainer):
+        from transformers import TrainerCallback
+
+        class WandbMetricsCallback(TrainerCallback):
+            def on_evaluate(self, args, state, control, metrics=None, **kwargs):
+                if metrics:
+                    wandb_logger.log_metrics(
+                        {f"cross_encoder/{k}": v for k, v in metrics.items()},
+                        step=state.global_step,
+                    )
+
+        trainer.add_callback(WandbMetricsCallback())
