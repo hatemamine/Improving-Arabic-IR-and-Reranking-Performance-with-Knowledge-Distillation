@@ -8,7 +8,7 @@ from datasets import Dataset
 from sentence_transformers import SentenceTransformerTrainer, losses
 from sentence_transformers.evaluation import RerankingEvaluator
 from sentence_transformers.training_args import SentenceTransformerTrainingArguments
-from transformers import EarlyStoppingCallback, IntervalStrategy
+from transformers import EarlyStoppingCallback
 
 from src.config.config import PipelineConfig
 from src.models.bi_encoder import BiEncoderModel
@@ -59,7 +59,7 @@ class BiEncoderTrainer:
 
         training_args = SentenceTransformerTrainingArguments(
             output_dir=os.path.join(t_cfg.output_dir, "bi_encoder"),
-            evaluation_strategy=IntervalStrategy.STEPS,
+            eval_strategy="steps",
             eval_steps=t_cfg.eval_steps,
             save_steps=t_cfg.eval_steps,
             save_total_limit=t_cfg.save_total_limit,

@@ -13,7 +13,6 @@ from transformers import (
     AutoModelForSequenceClassification,
     AutoTokenizer,
     EarlyStoppingCallback,
-    IntervalStrategy,
     Trainer,
     TrainingArguments,
 )
@@ -55,7 +54,7 @@ class CrossEncoderTrainer:
 
         training_args = TrainingArguments(
             output_dir=output_dir,
-            evaluation_strategy=IntervalStrategy.STEPS,
+            eval_strategy="steps",
             eval_steps=t_cfg.eval_steps,
             save_steps=t_cfg.eval_steps,
             save_total_limit=t_cfg.save_total_limit,
