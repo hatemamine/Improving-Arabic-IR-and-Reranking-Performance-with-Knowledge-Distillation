@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+*.pyo
+data_cache/
+training_output/
+charts/
+*.html
+!README*.html
