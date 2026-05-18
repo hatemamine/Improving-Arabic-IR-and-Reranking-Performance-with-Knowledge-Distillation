@@ -129,7 +129,7 @@ class ReportGenerator:
             ("Base model", f"{cfg.model.base_model} ({cfg.model.get_hf_model_id()})"),
             ("Encoder type", cfg.model.encoder_type),
             ("Knowledge distillation", f"{cfg.training.use_kd} | mode={cfg.training.kd_mode}"),
-            ("KD α (label smooth)", cfg.training.kd_alpha),
+            ("KD λ (distillation weight)", cfg.training.kd_lambda),
             ("KD temperature", cfg.training.kd_temperature),
             ("Hard negatives", f"{cfg.training.hard_negatives} | {cfg.training.hn_strategy}"),
             ("LoRA", cfg.model.use_lora),

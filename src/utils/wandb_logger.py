@@ -147,7 +147,7 @@ def _flatten_config(config) -> dict:
     flat.update({
         "use_kd": t.use_kd,
         "kd_mode": t.kd_mode,
-        "kd_alpha": t.kd_alpha,
+        "kd_lambda": t.kd_lambda,
         "kd_temperature": t.kd_temperature,
         "hard_negatives": t.hard_negatives,
         "hn_strategy": t.hn_strategy,
